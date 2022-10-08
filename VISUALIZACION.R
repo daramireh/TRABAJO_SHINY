@@ -6,12 +6,15 @@ library(readr)
 
 
 ##----------------- BASE DE DATOS DE PRUEBAS TRANSFIYA ----------------#
-df <- read_excel("TRANSFIYA.xlsx")
-ACH <- read_excel("TODO_ACH1.xlsx")
+df <- read_excel("C:/Users/DELL/OneDrive - SKITCONSULTING LTDA/SKIT KONCILIA/DASH/TRABAJO_SHINY/TRANSFIYA.xlsx")
+ACH <- read_excel("C:/Users/DELL/OneDrive - SKITCONSULTING LTDA/SKIT KONCILIA/DASH/TRABAJO_SHINY/TODO_ACH1.xlsx")
 
 df$FECHAPROCESO = as.factor(df$FECHAPROCESO)
 ACH$FECHAPROCESO = as.factor(ACH$FECHAPROCESO)
 
+
+ACH$ORIGEN = ifelse(ACH$ENTIDADORIGEN == 1032, 1, 0)
+ACH$DESTINO = ifelse(ACH$ENTIDADFIN == 32, 1, 0)
 ### ------------------- RESUMEN CANAL TRANSFIYA -----------------------#
 resumen = df %>% group_by(FECHAPROCESO, TIPOTX, AREA) %>%
   summarise(valtransaccion = mean(VALORTRANSACCION),
@@ -22,7 +25,8 @@ resumen = resumen %>%
   rename(CANAL = AREA)
 
 ### ------------------- RESUMEN CANALES ACH & PSE---------------------#
-resu_ACH = ACH %>% group_by(FECHAPROCESO, TIPOTX, CANAL) %>%
+resu_ACH = ACH %>% 
+  group_by(FECHAPROCESO, TIPOTX, CANAL, ORIGEN, DESTINO) %>%
   summarise(valtransaccion = mean(VALORTRANSACCION),
             transacciones = n(),
             consistentes = sum(ESCONSISTENTE))
@@ -68,6 +72,18 @@ BANCO = PROCESO %>%
          peso_trans = trans / sum(PROCESO$transacciones) * 100)%>%
   mutate(ponderado_val = conciliado * (peso_val/100),
          ponderado_trans = conciliado * (peso_trans/100))
+#---------------------------------------------------------------------
+
+ACH_RESUMEN = resu_ACH %>% 
+  group_by(CANAL, ORIGEN, DESTINO) %>%
+  summarise(valor = sum(valtransaccion),
+            trans = sum(transacciones),
+            consistentes = sum(consistentes)) %>%
+  mutate(conciliado = consistentes / trans * 100,
+         peso_val = valor / sum(resu_ACH$valtransaccion) * 100,
+         peso_trans = trans / sum(resu_ACH$transacciones) * 100)%>%
+  mutate(ponderado_val = conciliado * (peso_val/100),
+         ponderado_trans = conciliado * (peso_trans/100))
 
 ###-------------- ESTADO DE CONCILIACION DEL BANCO POR FECHA --------#
 BANCO_FECHA = PROCESO %>% 
@@ -80,6 +96,18 @@ BANCO_FECHA = PROCESO %>%
          peso_trans = trans / sum(PROCESO$transacciones) * 100)%>%
   mutate(ponderado_val = conciliado * (peso_val/100),
          ponderado_trans = conciliado * (peso_trans/100))
+#--------------------------------------------------------------------
+
+ACH_FECHA = resu_ACH %>% 
+  group_by(FECHAPROCESO, CANAL, ORIGEN, DESTINO) %>%
+  summarise(valor = sum(valtransaccion),
+            trans = sum(transacciones),
+            consistentes = sum(consistentes)) %>%
+  mutate(conciliado = consistentes / trans * 100,
+         peso_val = valor / sum(resu_ACH$valtransaccion) * 100,
+         peso_trans = trans / sum(resu_ACH$transacciones) * 100)%>%
+  mutate(ponderado_val = conciliado * (peso_val/100),
+         ponderado_trans = conciliado * (peso_trans/100))
 
 ###-----------------------------------------------------------
 # exportar a .csv
@@ -87,6 +115,9 @@ BANCO_FECHA = PROCESO %>%
 write.csv(PROCESO, 'PROCESO.csv')
 write.csv(BANCO, 'BANCO.csv')
 write.csv(BANCO_FECHA, 'BANCO_FECHA.csv')
+write.csv(ACH_RESUMEN, 'ACH_RESUMEN.csv')
+write.csv(ACH_FECHA, 'ACH_FECHA.csv')
+
 
 ## ------------------------ VISUALIZACIONES -----------------------#
 ggplot(PROCESO, aes(x = CANAL, 
